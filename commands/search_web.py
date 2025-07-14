@@ -1,6 +1,6 @@
 # commands/search_web.py
 import webbrowser
-from speak import speak
+from assistant.speak import speak
 
 def handle(query):
     query = query.replace("search", "").strip()

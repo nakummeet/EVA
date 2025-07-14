@@ -1,0 +1,6 @@
+pyttsx3
+speechrecognition
+pyaudio
+google-api-python-client
+tk
+requests

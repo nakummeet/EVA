@@ -1,7 +1,7 @@
 import os
 import subprocess
 import winshell
-from speak import speak  # Your custom speak module
+from assistant.speak import speak 
 
 def handle(command):
     command = command.lower()

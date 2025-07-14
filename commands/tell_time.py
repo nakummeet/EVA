@@ -1,5 +1,5 @@
 from datetime import datetime
-from speak import speak
+from assistant.speak import speak
 
 def handle():
     time = datetime.now().strftime("%I:%m %p")
