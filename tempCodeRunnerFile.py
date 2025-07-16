@@ -1,0 +1,1 @@
+ chat_ui.add_message("🤖 EVA (Gemini)", gemini_response)
