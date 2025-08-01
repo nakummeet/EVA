@@ -1,55 +1,42 @@
-import os
-import subprocess
-import winshell
-from assistant.speak import speak 
+# file: commands/open_app.py
+
+import pyautogui
+import time
+from assistant.speak import speak
+
+def _execute_open(app_name):
+    """The core logic to open an application."""
+    try:
+        # Press Windows key to open the Start Menu/Search
+        pyautogui.press('win')
+        time.sleep(1)
+
+        # Type the app name
+        pyautogui.write(app_name, interval=0.1)
+        time.sleep(1)
+
+        # Press Enter to open the app
+        pyautogui.press('enter')
+
+        speak(f"Opening {app_name}")
+    except Exception as e:
+        error_msg = f"Sorry, I encountered an error trying to open {app_name}."
+        print(f"Error: {e}")
+        speak(error_msg)
 
 def handle(command):
-    command = command.lower()
-
-    if "open notepad" in command:
-        speak("Opening Notepad")
-        os.system("notepad")
-
-    elif "open chrome" in command:
-        speak("Opening Google Chrome")
-        os.system("start chrome")
-
-    elif "open recycle bin" in command:
-        speak("Opening Recycle Bin")
-        subprocess.Popen('explorer.exe shell:RecycleBinFolder')
-
-    elif "empty recycle bin" in command or "delete recycle bin" in command:
-        speak("Emptying Recycle Bin")
-        try:
-            winshell.recycle_bin().empty(confirm=False, show_progress=False, sound=True)
-            speak("Recycle Bin emptied successfully")
-        except Exception as e:
-            speak("Failed to empty Recycle Bin")
-            print(str(e))
-
-    elif "open command prompt" in command:
-        speak("Opening Command Prompt")
-        os.system("start cmd")
-
-    elif "open calculator" in command:
-        speak("Opening Calculator")
-        os.system("calc")
-
-    elif "shutdown" in command:
-        speak("Shutting down the system")
-        os.system("shutdown /s /t 5")
-
-    elif "restart" in command:
-        speak("Restarting the system")
-        os.system("shutdown /r /t 5")
-
-    elif "log off" in command:
-        speak("Logging off")
-        os.system("shutdown /l")
-
-    elif "open vscode" in command:
-        speak("Opening Visual Studio Code")
-        os.system("code")  # Assumes VS Code is in PATH
-
-    else:
-        speak("Sorry, I don't understand the command.")
+    """
+    Parses the command to extract the application name and then opens it.
+    Example: "open notepad" -> "notepad"
+    """
+    try:
+        # Splits the command string by "open " and takes the second part [1]
+        # .strip() removes any leading/trailing whitespace
+        app_name = command.lower().split("open", 1)[1].strip()
+        
+        if app_name:
+            _execute_open(app_name)
+        else:
+            speak("You said 'open', but didn't specify which application.")
+    except IndexError:
+        speak("I didn't catch which application you want to open.")

@@ -1,92 +1,143 @@
 import time
 import re
-from threading import Thread
 
+# --- Local Imports ---
+# Make sure your project structure has these files and functions.
 from assistant.listen import listen
 from assistant.speak import speak
-from assistant.gemini_chat import handle_gemini
-from assistant.chat_ui import ChatWindow
 
+# Import all your command handlers
 import commands.open_app as open_app
 import commands.search_web as search_web
 import commands.tell_time as tell_time
 import commands.wikipedia_lookup as wiki
 
-from config import ACTIVATION_PHRASE, INACTIVITY_TIMEOUT
+# --- Configuration ---
+# Import configuration variables from the config.py file.
+from config import ACTIVATION_PHRASES, INACTIVITY_TIMEOUT
 
 
-def assistant_main(chat_ui):
-    speak("EVA is ready. Say 'Hey Eva' to begin.")
-    chat_ui.add_message("🤖 EVA", "EVA is ready. Say 'Hey Eva' to begin.")
+# --- Command Routing Dictionary ---
+# Maps keywords to the function that should handle them.
+# This avoids a long if/elif/else chain.
+COMMANDS = {
+    "open": open_app.handle,
+    "search": search_web.handle,
+    "who is": wiki.handle,
+    "what is": wiki.handle,
+    # Use a lambda for commands that don't need the 'command' text as input.
+    "time": lambda command: tell_time.handle(),
+}
+
+def handle_command(command):
+    """
+    Parses a command and calls the appropriate handler function.
+
+    Args:
+        command (str): The user's command after the activation phrase.
+
+    Returns:
+        str or bool: "exit" to terminate, True if handled, False if not recognized.
+    """
+    # --- FIXED EXIT LOGIC ---
+    # We split the command into words to check for exact matches.
+    # This prevents parts of other words from accidentally triggering an exit.
+    # For example, "explain the word exit" will no longer cause a shutdown.
+    command_words = command.split()
+    if "exit" in command_words or "bye" in command_words or "goodbye" in command_words:
+        speak("Goodbye!")
+        print("Exiting program.")
+        return "exit"
+
+    for keyword, handler_function in COMMANDS.items():
+        if keyword in command:
+            handler_function(command)
+            return True  # Command was successfully handled
+
+    return False  # No matching command keyword was found
+
+def start_conversational_mode():
+    """
+    Enters a loop to listen for multiple commands until timeout or sleep command.
+    """
+    speak("Eva here. How can I help?")
+    print("\n--- Conversational Mode Activated ---")
+    last_active_time = time.time()
 
     while True:
-        # Wait for activation phrase
+        if time.time() - last_active_time > INACTIVITY_TIMEOUT:
+            speak("No commands received. Going back to sleep.")
+            print("Inactivity timeout. Returning to one-shot mode.")
+            break
+
         command = listen()
-        print("Heard:", command)
-        command_cleaned = re.sub(r"[^\w\s]", "", command.lower())
+        if not command:
+            continue
 
-        if ACTIVATION_PHRASE in command_cleaned:
-            speak("Eva here. How can I help?")
-            chat_ui.add_message("🤖 EVA", "Eva here. How can I help?")
-            time.sleep(0.5)
+        print(f"Command received: '{command}'")
+        last_active_time = time.time()
 
-            last_active_time = time.time()
+        if "go to sleep" in command:
+            speak("Going to sleep.")
+            print("Going to sleep. Returning to one-shot mode.")
+            break
 
-            while True:
-                # Timeout if user is inactive
-                if time.time() - last_active_time > INACTIVITY_TIMEOUT:
-                    speak("No commands received. Going back to sleep.")
-                    chat_ui.add_message("🤖 EVA", "No commands received. Going back to sleep.")
-                    break
+        if not handle_command(command):
+            speak("Sorry, I don't understand that command.")
+            print("Command not recognized in conversational mode.")
+    
+    print("--- Conversational Mode Deactivated ---\n")
 
-                # Listen for user command
-                command = listen()
-                print("Command received:", command)
+def assistant_main():
+    """
+    The main loop. Listens for an activation phrase and then delegates the command.
+    """
+    speak("EVA is ready.")
+    print("EVA is ready. Listening for activation phrase...")
 
-                if not command:
-                    continue
+    while True:
+        full_command = listen()
+        if not full_command:
+            continue
 
-                chat_ui.add_message("🧑 You", command)
-                last_active_time = time.time()
-                command_lower = command.lower()
+        triggered_phrase = None
+        for phrase in ACTIVATION_PHRASES:
+            if phrase in full_command:
+                triggered_phrase = phrase
+                break
+        
+        if triggered_phrase:
+            print(f"Activation detected: '{full_command}'")
+            
+            try:
+                # Extract the command part after the activation phrase
+                actual_command = full_command.split(triggered_phrase, 1)[1].strip()
+            except IndexError:
+                actual_command = ""
 
-                # Handle predefined commands
-                if "open" in command_lower:
-                    open_app.handle(command)
-                elif "search" in command_lower:
-                    search_web.handle(command)
-                elif "time" in command_lower:
-                    tell_time.handle()
-                elif "who is" in command_lower or "what is" in command_lower:
-                    wiki.handle(command)
-                elif "go to sleep" in command_lower:
-                    speak("Going to sleep.")
-                    chat_ui.add_message("🤖 EVA", "Going to sleep.")
-                    break
-                elif "exit" in command_lower or "bye" in command_lower:
-                    speak("Goodbye!")
-                    chat_ui.add_message("🤖 EVA", "Goodbye!")
-                    return
-                else:
-                    # Fallback to Gemini for general queries
-                    speak("Let me check that for you.")
-                    try:
-                        gemini_response = handle_gemini(command)
-                        chat_ui.add_message("🤖 EVA (Gemini)", gemini_response)
-                        speak("Here’s what I found.", gemini_response)
-                    except Exception as e:
-                        error_msg = f"Something went wrong with Gemini: {e}"
-                        print(error_msg)
-                        chat_ui.add_message("🤖 EVA", error_msg)
-                        speak("Sorry, I encountered an error.")
+            if not actual_command:
+                speak("Hmm")
+                continue
 
-# Entry point
+            # Check for the command to start the conversational mode
+            if actual_command in ("start", "start listening", "let's chat"):
+                start_conversational_mode()
+                continue
+
+            # Default to one-shot command handling
+            result = handle_command(actual_command)
+            if result == "exit":
+                break
+            
+            if result is False:
+                speak("I'm not sure how to help with that.")
+                print(f"Unrecognized one-shot command: '{actual_command}'")
+
+# --- Program Entry Point ---
 if __name__ == "__main__":
-    chat_ui = ChatWindow()
-    chat_ui.show()  # Show window before starting assistant
-
-    # Run assistant in a background thread
-    Thread(target=assistant_main, args=(chat_ui,), daemon=True).start()
-
-    # Keep the GUI running
-    chat_ui.run()
+    try:
+        assistant_main()
+    except KeyboardInterrupt:
+        print("\nProgram interrupted by user. Exiting.")
+    except Exception as e:
+        print(f"A fatal error occurred: {e}")
